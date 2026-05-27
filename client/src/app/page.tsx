@@ -169,27 +169,28 @@ export default function Home() {
           </div>
 
           {activeTab === 'upload' && (
-            <div className="flex flex-row items-end pb-2 shrink-0">
-              <label
-                htmlFor="maxDownloads"
-                className="text-sm font-medium text-gray-700 mb-1 mr-1"
-              >
-                Max downloads:
-              </label>
-              <input
-                type="number"
-                id="maxDownloads"
-                min={MIN_MAX_DOWNLOADS}
-                max={MAX_MAX_DOWNLOADS}
-                value={maxDownloads}
-                onChange={(e) =>
-                  setMaxDownloads(parseMaxDownloadsInput(e.target.value))
-                }
-                disabled={isUploading}
-                className="input-field w-12 h-8 text-center"
-                title="Invite is removed after this many successful downloads"
-              />
-            </div>
+           <div className="flex flex-col sm:flex-row sm:items-end pb-2 shrink-0 gap-1 sm:gap-2">
+  <label
+    htmlFor="maxDownloads"
+    className="text-sm font-medium text-gray-700"
+  >
+    Max downloads:
+  </label>
+
+  <input
+    type="number"
+    id="maxDownloads"
+    min={MIN_MAX_DOWNLOADS}
+    max={MAX_MAX_DOWNLOADS}
+    value={maxDownloads}
+    onChange={(e) =>
+      setMaxDownloads(parseMaxDownloadsInput(e.target.value))
+    }
+    disabled={isUploading}
+    className="input-field w-full sm:w-16 h-8 text-center"
+    title="Invite is removed after this many successful downloads"
+  />
+</div>
           )}
         </div>
 
