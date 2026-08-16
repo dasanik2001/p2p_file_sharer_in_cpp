@@ -31,8 +31,9 @@
         <article class="feature-card">
           <h3>P2P download path</h3>
           <p>
-            Each download runs the P2P wire protocol (<code>Filename:</code> header + binary stream)
-            over a coordinated <code>socketpair</code> inside the API process. No TCP listener is started on upload.
+            Each download streams file data in <strong>64 KB chunks</strong> directly from disk
+            using <code>httplib::set_content_provider</code>. Memory usage is constant (~64 KB)
+            regardless of file size.
           </p>
         </article>
         <article class="feature-card">
@@ -45,15 +46,22 @@
         <article class="feature-card">
           <h3>Upload limits</h3>
           <p>
-            Frontend enforces <strong>5 MB</strong> max size and blocks <strong>video</strong> files
-            (MIME <code>video/*</code> and common extensions such as MP4, MOV, WebM).
+            Frontend enforces <strong>100 MB</strong> max size. <strong>All file types</strong> are
+            supported — audio (MP3, WAV), video (MP4, MOV, WebM), archives (ZIP, 7z), documents, and more.
           </p>
         </article>
         <article class="feature-card">
           <h3>Invite code</h3>
           <p>
             A random port number in 49152–65534 is the shareable invite code. It is only a lookup key;
-            the actual P2P channel uses an ephemeral socket pair per download request.
+            downloads stream directly from the file on disk.
+          </p>
+        </article>
+        <article class="feature-card">
+          <h3>Resumable downloads</h3>
+          <p>
+            The API supports HTTP <code>Range</code> requests (<code>206 Partial Content</code>).
+            If a download is interrupted, the client can resume from where it left off.
           </p>
         </article>
         <article class="feature-card">
@@ -81,12 +89,12 @@
             <tr>
               <td>Max file size</td>
               <td>Browser (dropzone)</td>
-              <td>5 MB — <code>client/src/lib/uploadValidation.ts</code></td>
+              <td>100 MB — <code>client/src/lib/uploadValidation.ts</code></td>
             </tr>
             <tr>
               <td>No videos</td>
-              <td>Browser</td>
-              <td>Rejected by MIME and extension (MP4, MOV, MKV, WebM, …)</td>
+              <td>—</td>
+              <td>All file types are now supported (audio, video, archives, documents)</td>
             </tr>
             <tr>
               <td>Max downloads</td>

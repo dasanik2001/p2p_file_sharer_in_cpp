@@ -47,6 +47,17 @@ namespace server::service
         bool receiveViaLocalP2P(int port, std::string &outFilename, std::string &outBody,
                                 std::string &outError, int *outDownloadsRemaining = nullptr);
 
+        /**
+         * Streaming download helpers — used by FileController with httplib content providers.
+         * claimInviteForTransfer: marks invite in-progress, rejects if expired/exhausted/busy.
+         * releaseInviteClaim: clears in-progress flag without consuming a download slot.
+         * recordSuccessfulDownload: increments count; removes invite when quota is reached.
+         */
+        bool claimInviteForTransfer(int port, SharedFile &outFile, std::string &outError);
+        void releaseInviteClaim(int port);
+        void recordSuccessfulDownload(int port, const std::string &filePath,
+                                      int &outDownloadsRemaining);
+
     private:
         mutable std::mutex mapMutex_;
         std::unordered_map<int, SharedFile> available_files_;
@@ -65,12 +76,9 @@ namespace server::service
         bool isInviteExpired(const SharedFile &file) const;
 
         std::mutex &transferMutexForPort(int port);
-        bool claimInviteForTransfer(int port, SharedFile &outFile, std::string &outError);
-        void releaseInviteClaim(int port);
         void consumeInvite(int port, const std::string &filePath);
         void expireIdleInvite(int port, const std::string &filePath);
-        void recordSuccessfulDownload(int port, const std::string &filePath,
-                                      int &outDownloadsRemaining);
     };
 
 } // namespace server::service
+

@@ -83,9 +83,26 @@ namespace server::services
         std::error_code ec;
         fs::create_directories(uploadDir_, ec);
 
-        // Use httplib default thread pool (avoids custom pool edge cases under load)
-        server_.set_read_timeout(120, 0);
-        server_.set_write_timeout(120, 0);
+        // Generous timeouts for large 100 MB+ transfers over slower links
+        server_.set_read_timeout(300, 0);
+        server_.set_write_timeout(300, 0);
+
+        // Configurable max upload size (default 100 MB + 2 MB multipart header headroom)
+        std::size_t maxUploadMb = 100;
+        if (const char *env = std::getenv("TRANSFERA_MAX_UPLOAD_MB"); env && *env)
+        {
+            try
+            {
+                const unsigned long mb = std::stoul(env);
+                if (mb > 0 && mb <= 4096)
+                    maxUploadMb = mb;
+            }
+            catch (...)
+            {
+            }
+        }
+        constexpr std::size_t kMultipartHeadroomBytes = 2 * 1024 * 1024;
+        server_.set_payload_max_length((maxUploadMb * 1024 * 1024) + kMultipartHeadroomBytes);
 
         registerRoutes();
         setupHttpLogging();
@@ -232,11 +249,11 @@ namespace server::services
         setHeaderOnce(res, "Access-Control-Allow-Origin", "*");
         setHeaderOnce(res, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         setHeaderOnce(res, "Access-Control-Allow-Headers",
-                      "Content-Type, Authorization, Accept, X-Requested-With");
+                      "Content-Type, Authorization, Accept, X-Requested-With, Range");
         setHeaderOnce(res, "Access-Control-Max-Age", "86400");
         setHeaderOnce(res, "Access-Control-Expose-Headers",
                       "Content-Disposition, X-Filename, X-Downloads-Remaining, Content-Type, "
-                      "Content-Length");
+                      "Content-Length, Accept-Ranges, Content-Range");
     }
 
     void FileController::handleCorsOrNotFound(const httplib::Request &req,
@@ -398,36 +415,122 @@ namespace server::services
             if (server::log::verboseEnabled())
                 server::log::info("download request invite_port=" + std::to_string(peerPort));
 
-            std::string filename;
-            std::string body;
-            std::string p2pError;
-            int downloadsRemaining = 0;
-            if (!fileSharer_.receiveViaLocalP2P(peerPort, filename, body, p2pError,
-                                                &downloadsRemaining))
+            // Claim the invite (sets transferInProgress, rejects if expired/exhausted/busy)
+            service::SharedFile shared;
+            std::string claimError;
+            if (!fileSharer_.claimInviteForTransfer(peerPort, shared, claimError))
             {
-                if (p2pError.find("invalid") != std::string::npos ||
-                    p2pError.find("expired") != std::string::npos ||
-                    p2pError.find("no longer") != std::string::npos ||
-                    p2pError.find("already in progress") != std::string::npos)
+                if (claimError.find("invalid") != std::string::npos ||
+                    claimError.find("expired") != std::string::npos ||
+                    claimError.find("no longer") != std::string::npos ||
+                    claimError.find("already in progress") != std::string::npos)
                 {
                     res.status = 404;
-                    res.set_content(std::string("Not Found: ") + p2pError, "text/plain");
+                    res.set_content(std::string("Not Found: ") + claimError, "text/plain");
                 }
                 else
                 {
                     res.status = 500;
-                    res.set_content(std::string("Error downloading file: ") + p2pError,
+                    res.set_content(std::string("Error downloading file: ") + claimError,
                                     "text/plain");
                 }
                 return;
             }
 
-            res.status = 200;
+            // Verify the file still exists on disk
+            if (!fs::exists(shared.path) || !fs::is_regular_file(shared.path))
+            {
+                fileSharer_.releaseInviteClaim(peerPort);
+                res.status = 404;
+                res.set_content("Not Found: file no longer on server", "text/plain");
+                return;
+            }
+
+            const auto fileSize = static_cast<std::size_t>(fs::file_size(shared.path));
+            const std::string &filename = shared.downloadName.empty()
+                                              ? "downloaded-file"
+                                              : shared.downloadName;
+
+            server::log::info("streaming download start invite_port=" +
+                              std::to_string(peerPort) + " name=" + filename +
+                              " bytes=" + std::to_string(fileSize));
+
+            // Pre-calculate downloads remaining (before this transfer completes)
+            const int downloadsRemaining =
+                std::max(0, shared.maxDownloads - shared.downloadCount - 1);
+
+            // Set response headers
+            setHeaderOnce(res, "Accept-Ranges", "bytes");
             setHeaderOnce(res, "Content-Disposition",
                           "attachment; filename=\"" + filename + "\"");
             setHeaderOnce(res, "X-Filename", filename);
-            setHeaderOnce(res, "X-Downloads-Remaining", std::to_string(downloadsRemaining));
-            res.set_content(body, "application/octet-stream");
+            setHeaderOnce(res, "X-Downloads-Remaining",
+                          std::to_string(downloadsRemaining));
+
+            // Capture state for the content provider closure
+            auto filePath = std::make_shared<std::string>(shared.path);
+            const int invitePort = peerPort;
+
+            // Zero-RAM streaming: httplib calls provider with (offset, length, sink)
+            // and handles Range / 206 automatically when content_length is known.
+            res.set_content_provider(
+                fileSize,
+                "application/octet-stream",
+                // Provider: read file at requested offset in 64 KB chunks
+                [filePath](std::size_t offset, std::size_t length,
+                           httplib::DataSink &sink) -> bool
+                {
+                    std::ifstream file(*filePath, std::ios::binary);
+                    if (!file)
+                        return false;
+
+                    file.seekg(static_cast<std::streamoff>(offset));
+                    if (!file.good())
+                        return false;
+
+                    char buffer[65536]; // 64 KB streaming buffer
+                    std::size_t remaining = length;
+                    while (remaining > 0)
+                    {
+                        const auto toRead =
+                            std::min(sizeof(buffer), remaining);
+                        file.read(buffer, static_cast<std::streamsize>(toRead));
+                        const auto n =
+                            static_cast<std::size_t>(file.gcount());
+                        if (n == 0)
+                            break;
+                        if (!sink.write(buffer, n))
+                            return false;
+                        remaining -= n;
+                    }
+                    return true;
+                },
+                // Releaser: called when response is fully sent or connection drops
+                [this, invitePort, filePath](bool success)
+                {
+                    if (success)
+                    {
+                        int remaining = 0;
+                        fileSharer_.recordSuccessfulDownload(
+                            invitePort, *filePath, remaining);
+                        server::log::info(
+                            "streaming download complete invite_port=" +
+                            std::to_string(invitePort) +
+                            " remaining=" + std::to_string(remaining));
+                    }
+                    else
+                    {
+                        // Connection dropped mid-stream: release claim so client
+                        // can retry / resume with a Range header.
+                        fileSharer_.releaseInviteClaim(invitePort);
+                        server::log::info(
+                            "streaming download interrupted invite_port=" +
+                            std::to_string(invitePort) +
+                            " (claim released for retry/resume)");
+                    }
+                });
+
+            res.status = 200; // httplib upgrades to 206 if Range header is present
         }
         catch (const std::exception &e)
         {

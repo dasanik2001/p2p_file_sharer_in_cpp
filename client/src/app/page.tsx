@@ -100,6 +100,8 @@ export default function Home() {
     try {
       const response = await axios.get(apiUrl(`/api/download/${port}`), {
         responseType: 'blob',
+        // Accept both 200 (full) and 206 (partial/range) responses
+        validateStatus: (status) => status === 200 || status === 206,
       });
 
       const filename = resolveDownloadFilename(response.headers);
@@ -116,6 +118,7 @@ export default function Home() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading file:', error);
       if (axios.isAxiosError(error) && error.response?.status === 404) {

@@ -83,7 +83,7 @@ export default function FileUpload({ onFileUpload, isUploading }: FileUploadProp
           </div>
           <p className="text-lg font-medium">Drag & drop a file here, or click to select</p>
           <p className="text-sm text-gray-500">
-            Max {MAX_UPLOAD_MB} MB · no video files (e.g. MP4, MOV, WebM)
+            Max {MAX_UPLOAD_MB} MB · all file types supported
           </p>
         </div>
       </div>
