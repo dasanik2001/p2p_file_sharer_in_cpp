@@ -1,0 +1,383 @@
+// internal/tui/menu.go — Interactive Terminal UI
+//
+// When the user types `transfera` without any subcommand, or double-clicks
+// transfera.exe in Windows Explorer, this interactive menu is displayed.
+//
+// It provides a friendly, menu-driven interface for all Transfera features:
+//   1. Upload a file
+//   2. Download a file
+//   3. Health check
+//   4. Install to PATH
+//   5. Change server URL
+//   6. Help
+//   7. Exit
+
+package tui
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/dasanik2001/transfera-client/cli/internal/api"
+	"github.com/dasanik2001/transfera-client/cli/internal/installer"
+	"github.com/dasanik2001/transfera-client/cli/internal/progress"
+	"github.com/dasanik2001/transfera-client/cli/internal/validation"
+	"github.com/schollz/progressbar/v3"
+)
+
+// =========================================================================
+// Color helpers — ANSI escape codes for terminal styling
+// =========================================================================
+
+const (
+	colorReset  = "\033[0m"
+	colorCyan   = "\033[36m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+	colorBold   = "\033[1m"
+	colorDim    = "\033[2m"
+	colorWhite  = "\033[97m"
+	colorMagenta = "\033[35m"
+)
+
+// =========================================================================
+// RunMenu — entry point for the interactive TUI
+// =========================================================================
+
+// RunMenu displays the interactive terminal menu and handles user actions.
+// apiURL and verbose are pointers to the global config from root.go.
+func RunMenu(apiURL *string, verbose *bool) {
+	reader := bufio.NewReader(os.Stdin)
+
+	clearScreen()
+	printBanner(*apiURL)
+
+	for {
+		printMenu(*apiURL)
+		choice := prompt(reader, fmt.Sprintf("\n  %s▶ Choose an option (1-7):%s ", colorCyan, colorReset))
+
+		switch strings.TrimSpace(choice) {
+		case "1":
+			handleUpload(reader, *apiURL, *verbose)
+		case "2":
+			handleDownload(reader, *apiURL, *verbose)
+		case "3":
+			handleHealth(*apiURL, *verbose)
+		case "4":
+			handleInstall()
+		case "5":
+			handleChangeServer(reader, apiURL)
+		case "6":
+			handleHelp()
+		case "7", "q", "Q", "exit", "quit":
+			fmt.Printf("\n  %s👋 Goodbye!%s\n\n", colorCyan, colorReset)
+			return
+		default:
+			fmt.Printf("\n  %s✗ Invalid option. Please enter 1-7.%s\n", colorRed, colorReset)
+		}
+
+		fmt.Println()
+		promptContinue(reader)
+	}
+}
+
+// =========================================================================
+// Banner & Menu Display
+// =========================================================================
+
+func clearScreen() {
+	fmt.Print("\033[2J\033[H")
+}
+
+func printBanner(apiURL string) {
+	fmt.Println()
+	fmt.Printf("  %s%s", colorCyan, colorBold)
+	fmt.Println("  ___________                          _____")
+	fmt.Println(" |           |                        / ____|")
+	fmt.Println(" |--   ------'_ __ __ _ _ __  ___  | |__ ___ _ __ __ _")
+	fmt.Println("    |  |    | '__/ _' | '_ \\/ __|  |  __/ _ \\ '__/ _' |")
+	fmt.Println("    |  |    | | | (_| | | | \\__ \\  | | |  __/ | | (_| |")
+	fmt.Println("    |__|    |_|  \\__,_|_| |_|___/  |_|  \\___|_|  \\__,_|")
+	fmt.Printf("  %s\n", colorReset)
+	fmt.Printf("  %s%sSecure P2P File Sharing — Terminal Edition%s\n", colorDim, colorWhite, colorReset)
+	fmt.Println()
+
+	// Connection status
+	fmt.Printf("  %s● Server:%s %s\n", colorDim, colorReset, apiURL)
+
+	// PATH installation status
+	if installer.IsInPath() && installer.IsInstalled() {
+		fmt.Printf("  %s● Status:%s %s✓ Installed globally%s — type %stransfera%s anywhere\n",
+			colorDim, colorReset, colorGreen, colorReset, colorBold, colorReset)
+	} else {
+		fmt.Printf("  %s● Status:%s %s⚠ Not installed to PATH%s — select option 4 to install\n",
+			colorDim, colorReset, colorYellow, colorReset)
+	}
+	fmt.Println()
+}
+
+func printMenu(apiURL string) {
+	fmt.Printf("  %s%s┌──────────────────────────────────────────────┐%s\n", colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %-44s%s%s│%s\n", colorCyan, colorBold, colorReset, "What would you like to do?", colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s├──────────────────────────────────────────────┤%s\n", colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s1.%s 📤  Upload a file                       %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s2.%s 📥  Download a file                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s3.%s 🩺  Server Health Check                 %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s4.%s ⚡  Install to PATH                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorYellow, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s5.%s ⚙️   Change Server URL                   %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s6.%s ❓  Help & CLI Reference                %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s7.%s ❌  Exit                                %s%s│%s\n", colorCyan, colorBold, colorReset, colorRed, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s└──────────────────────────────────────────────┘%s\n", colorCyan, colorBold, colorReset)
+}
+
+// =========================================================================
+// Menu Handlers
+// =========================================================================
+
+func handleUpload(reader *bufio.Reader, apiURL string, verbose bool) {
+	fmt.Printf("\n  %s%s── Upload a File ──%s\n\n", colorCyan, colorBold, colorReset)
+
+	// Prompt for file path (supports drag-and-drop: strips quotes)
+	filePath := prompt(reader, fmt.Sprintf("  %sFile path (drag & drop or type):%s ", colorWhite, colorReset))
+	filePath = cleanPath(filePath)
+
+	if filePath == "" {
+		fmt.Printf("  %s✗ No file specified.%s\n", colorRed, colorReset)
+		return
+	}
+
+	// Validate file
+	fileSize, err := validation.ValidateFile(filePath, validation.DefaultMaxUploadMB)
+	if err != nil {
+		fmt.Printf("  %s✗ %s%s\n", colorRed, err, colorReset)
+		return
+	}
+
+	// Prompt for max downloads
+	maxDlStr := prompt(reader, fmt.Sprintf("  %sMax downloads (1-100, default 1):%s ", colorWhite, colorReset))
+	maxDownloads := 1
+	if maxDlStr != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(maxDlStr)); err == nil && n >= 1 && n <= 100 {
+			maxDownloads = n
+		}
+	}
+
+	filename := filepath.Base(filePath)
+	fmt.Printf("\n  File: %s%s%s (%s)\n", colorBold, filename, colorReset, validation.FormatFileSize(fileSize))
+	fmt.Printf("  Max downloads: %d\n\n", maxDownloads)
+
+	// Create progress bar and upload
+	bar := progress.NewUploadBar(fileSize, filename)
+	client := api.NewClient(apiURL, verbose)
+
+	result, err := client.Upload(filePath, maxDownloads, func(bytesSent int64) {
+		bar.Set64(bytesSent)
+	})
+
+	if err != nil {
+		fmt.Printf("\n  %s✗ Upload failed: %s%s\n", colorRed, err, colorReset)
+		return
+	}
+
+	bar.Finish()
+
+	// Display invite code
+	fmt.Printf("\n  %s✓ File ready to share!%s\n", colorGreen, colorReset)
+	fmt.Printf("  %s┌────────────────────────────────────────%s\n", colorCyan, colorReset)
+	fmt.Printf("  %s│%s  Invite code: %s%s%d%s\n", colorCyan, colorReset, colorBold, colorGreen, result.Port, colorReset)
+	fmt.Printf("  %s│%s  Max downloads: %d\n", colorCyan, colorReset, result.MaxDownloads)
+	fmt.Printf("  %s└────────────────────────────────────────%s\n", colorCyan, colorReset)
+	fmt.Printf("\n  Share this code to download on another device:\n")
+	fmt.Printf("    %stransfera download %d%s\n", colorBold, result.Port, colorReset)
+}
+
+func handleDownload(reader *bufio.Reader, apiURL string, verbose bool) {
+	fmt.Printf("\n  %s%s── Download a File ──%s\n\n", colorCyan, colorBold, colorReset)
+
+	// Prompt for invite code
+	codeStr := prompt(reader, fmt.Sprintf("  %sInvite code:%s ", colorWhite, colorReset))
+	codeStr = strings.TrimSpace(codeStr)
+
+	port, err := strconv.Atoi(codeStr)
+	if err != nil || port <= 0 || port > 65535 {
+		fmt.Printf("  %s✗ Invalid invite code '%s'. Must be a number (1-65535).%s\n", colorRed, codeStr, colorReset)
+		return
+	}
+
+	// Prompt for output directory
+	outputDir := prompt(reader, fmt.Sprintf("  %sSave to directory (Enter = current dir):%s ", colorWhite, colorReset))
+	outputDir = cleanPath(outputDir)
+
+	fmt.Printf("\n  Downloading from invite code: %s%d%s\n\n", colorBold, port, colorReset)
+
+	client := api.NewClient(apiURL, verbose)
+	var pBar *progressbar.ProgressBar
+
+	result, err := client.Download(port, outputDir, "", func(filename string, received, total int64) {
+		if pBar == nil {
+			displayName := filename
+			if displayName == "" {
+				displayName = "file"
+			}
+			if total > 0 {
+				pBar = progress.NewDownloadBar(total, displayName)
+			} else {
+				pBar = progress.NewDownloadBar(-1, displayName)
+			}
+		}
+		pBar.Set64(received)
+	})
+
+	if err != nil {
+		fmt.Printf("\n  %s✗ Download failed: %s%s\n", colorRed, err, colorReset)
+		return
+	}
+
+	if pBar != nil {
+		pBar.Finish()
+	}
+
+	fmt.Printf("\n  %s✓ Downloaded: %s%s (%s)\n", colorGreen, result.Filename, colorReset,
+		validation.FormatFileSize(result.FileSize))
+
+	if result.DownloadsRemaining >= 0 {
+		if result.DownloadsRemaining == 0 {
+			fmt.Printf("    %sThis was the last allowed download. Invite code is now expired.%s\n", colorYellow, colorReset)
+		} else {
+			fmt.Printf("    Downloads remaining: %d\n", result.DownloadsRemaining)
+		}
+	}
+	fmt.Printf("    Saved to: %s%s%s\n", colorBold, result.FilePath, colorReset)
+}
+
+func handleHealth(apiURL string, verbose bool) {
+	fmt.Printf("\n  %s%s── Server Health Check ──%s\n\n", colorCyan, colorBold, colorReset)
+
+	isLocal := strings.Contains(apiURL, "127.0.0.1") || strings.Contains(apiURL, "localhost")
+	if isLocal {
+		fmt.Printf("  Checking API server at %s ...\n", apiURL)
+	} else {
+		fmt.Printf("  Checking API server at %s %s(may take a few seconds if waking up)%s...\n",
+			apiURL, colorDim, colorReset)
+	}
+
+	client := api.NewClient(apiURL, verbose)
+	start := time.Now()
+	ok, err := client.Health()
+	latency := time.Since(start)
+
+	if err != nil {
+		fmt.Printf("\n  %s✗ API server is unreachable%s at %s\n", colorRed, colorReset, apiURL)
+		fmt.Printf("    %s\n", err)
+		if !isLocal {
+			fmt.Printf("\n  %sTip: The cloud server on Render spins down when idle.%s\n", colorYellow, colorReset)
+			fmt.Printf("  %sIt may take 30-50 seconds to wake up. Try again shortly!%s\n", colorYellow, colorReset)
+		}
+		return
+	}
+
+	if ok {
+		fmt.Printf("\n  %s✓ API server is online%s at %s\n", colorGreen, colorReset, apiURL)
+		fmt.Printf("    Response time: %s%s%s\n", colorBold, latency.Round(time.Millisecond), colorReset)
+	} else {
+		fmt.Printf("\n  %s⚠ API server responded but may not be healthy%s at %s\n", colorYellow, colorReset, apiURL)
+	}
+}
+
+func handleInstall() {
+	fmt.Printf("\n  %s%s── Install to PATH ──%s\n\n", colorCyan, colorBold, colorReset)
+
+	if installer.IsInPath() && installer.IsInstalled() {
+		fmt.Printf("  %s✓ Transfera is already installed and in PATH.%s\n", colorGreen, colorReset)
+		fmt.Printf("    Binary: %s\n", installer.InstalledBinaryPath())
+		fmt.Printf("    You can type %stransfera%s in any terminal.\n", colorBold, colorReset)
+		return
+	}
+
+	fmt.Printf("  Installing transfera to: %s\n", installer.InstallDir())
+	fmt.Printf("  Adding to user PATH...\n\n")
+
+	msg, err := installer.Install()
+	if err != nil {
+		fmt.Printf("  %s✗ Installation failed: %s%s\n", colorRed, err, colorReset)
+		return
+	}
+
+	fmt.Printf("  %s✓ %s%s\n", colorGreen, msg, colorReset)
+}
+
+func handleChangeServer(reader *bufio.Reader, apiURL *string) {
+	fmt.Printf("\n  %s%s── Change Server URL ──%s\n\n", colorCyan, colorBold, colorReset)
+	fmt.Printf("  Current server: %s%s%s\n\n", colorBold, *apiURL, colorReset)
+	fmt.Printf("  %s1.%s Official cloud: https://transfera-api.onrender.com\n", colorGreen, colorReset)
+	fmt.Printf("  %s2.%s Local server:   http://127.0.0.1:8080\n", colorGreen, colorReset)
+	fmt.Printf("  %s3.%s Custom URL\n", colorGreen, colorReset)
+
+	choice := prompt(reader, fmt.Sprintf("\n  %sSelect (1-3):%s ", colorWhite, colorReset))
+
+	switch strings.TrimSpace(choice) {
+	case "1":
+		*apiURL = "https://transfera-api.onrender.com"
+	case "2":
+		*apiURL = "http://127.0.0.1:8080"
+	case "3":
+		custom := prompt(reader, fmt.Sprintf("  %sEnter server URL:%s ", colorWhite, colorReset))
+		custom = strings.TrimSpace(custom)
+		if custom != "" {
+			*apiURL = custom
+		}
+	default:
+		fmt.Printf("  %sNo changes made.%s\n", colorDim, colorReset)
+		return
+	}
+
+	fmt.Printf("\n  %s✓ Server updated to: %s%s\n", colorGreen, *apiURL, colorReset)
+}
+
+func handleHelp() {
+	fmt.Printf("\n  %s%s── CLI Quick Reference ──%s\n\n", colorCyan, colorBold, colorReset)
+	fmt.Printf("  %sUpload a file:%s\n", colorBold, colorReset)
+	fmt.Printf("    transfera upload photo.jpg\n")
+	fmt.Printf("    transfera upload video.mp4 --max-downloads 5\n\n")
+	fmt.Printf("  %sDownload a file:%s\n", colorBold, colorReset)
+	fmt.Printf("    transfera download 52341\n")
+	fmt.Printf("    transfera download 52341 -o ~/Pictures/\n\n")
+	fmt.Printf("  %sHealth check:%s\n", colorBold, colorReset)
+	fmt.Printf("    transfera health\n\n")
+	fmt.Printf("  %sGlobal flags:%s\n", colorBold, colorReset)
+	fmt.Printf("    --api <url>    Set API server URL\n")
+	fmt.Printf("    --verbose      Show HTTP details\n\n")
+	fmt.Printf("  %sEnvironment variables:%s\n", colorBold, colorReset)
+	fmt.Printf("    TRANSFERA_API_URL         Override default server\n")
+	fmt.Printf("    NEXT_PUBLIC_API_BASE_URL  Alternative override\n")
+}
+
+// =========================================================================
+// Utility functions
+// =========================================================================
+
+func prompt(reader *bufio.Reader, msg string) string {
+	fmt.Print(msg)
+	line, _ := reader.ReadString('\n')
+	return strings.TrimSpace(strings.TrimRight(line, "\r\n"))
+}
+
+func promptContinue(reader *bufio.Reader) {
+	fmt.Printf("  %sPress Enter to continue...%s", colorDim, colorReset)
+	reader.ReadString('\n')
+	clearScreen()
+}
+
+// cleanPath strips surrounding quotes and whitespace from a file path.
+// This handles Windows drag-and-drop which wraps paths in double-quotes.
+func cleanPath(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.Trim(p, "\"'")
+	return strings.TrimSpace(p)
+}

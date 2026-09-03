@@ -7,7 +7,7 @@ A command-line client for [Transfera](../README.md) — secure P2P file sharing,
 ### Prerequisites
 
 - [Go 1.21+](https://go.dev/dl/) installed
-- Transfera C++ server running (see [server README](../server/README.md))
+- Connects out-of-the-box to the official production server (`https://transfera-api.onrender.com`). No local server setup required!
 
 ### Install & Build
 
@@ -22,20 +22,32 @@ go build -o transfera.exe .     # Windows
 go build -o transfera .         # Linux/macOS
 ```
 
-### Usage
+### Usage (Cross-Device Transfer, e.g. Laptop to Desktop)
 
-```bash
-# Check if the server is running
-./transfera health
+1. **On your Laptop** (Upload a photo):
+   ```bash
+   ./transfera upload my_photo.jpg
+   ```
+   Output:
+   ```
+   ✓ File ready to share!
+   ┌────────────────────────────────────────
+   │  Invite code: 55228
+   │  Max downloads: 1
+   └────────────────────────────────────────
+   ```
 
-# Upload a file (get an invite code)
-./transfera upload report.pdf
-./transfera upload video.mp4 --max-downloads 5
+2. **On your Desktop** (Download the photo):
+   ```bash
+   ./transfera download 55228
+   # Or specify an output directory
+   ./transfera download 55228 -o ~/Pictures/
+   ```
 
-# Download a file (using the invite code)
-./transfera download 52341
-./transfera download 52341 -o ~/Downloads/
-```
+3. **Check Server Health**:
+   ```bash
+   ./transfera health
+   ```
 
 ## Commands
 
@@ -45,15 +57,15 @@ Check if the API server is reachable.
 
 ```bash
 transfera health
-transfera --api https://transfera-api.onrender.com health
+transfera --api http://127.0.0.1:8080 health  # to check a local dev server
 ```
 
 ### `transfera upload <file>`
 
-Upload a file and receive an invite code to share.
+Upload a file (photo, video, archive, document) and receive an invite code to share.
 
 ```bash
-transfera upload report.pdf                    # Basic upload (1 download allowed)
+transfera upload vacation.jpg                  # Basic photo upload
 transfera upload video.mp4 -n 5               # Allow 5 downloads
 transfera upload huge.zip --max-size 500       # Allow files up to 500MB
 ```
@@ -70,24 +82,24 @@ Download a file using an invite code shared with you.
 
 ```bash
 transfera download 52341                       # Download to current directory
-transfera download 52341 -o ./received/        # Download to specific directory
+transfera download 52341 -o ./received/        # Download to specific directory (creates it if missing)
 transfera download 52341 --output-name doc.pdf # Override filename
 ```
 
 **Flags:**
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--output` | `-o` | `.` | Output directory |
+| `--output` | `-o` | `.` | Output directory (automatically created if it doesn't exist) |
 | `--output-name` | | | Override download filename |
 
-## Global Flags
+## Global Flags & Environment Variables
 
 Available on all commands:
 
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--api` | `-a` | `http://127.0.0.1:8080` | API server URL |
-| `--verbose` | `-V` | `false` | Enable verbose output |
+| Flag | Short | Default / Fallback | Description |
+|------|-------|--------------------|-------------|
+| `--api` | `-a` | `https://transfera-api.onrender.com` | API server URL (can also be set via `TRANSFERA_API_URL` or `NEXT_PUBLIC_API_BASE_URL`) |
+| `--verbose` | `-V` | `false` | Enable verbose output (shows HTTP headers, timing) |
 
 ## Cross-Compilation
 

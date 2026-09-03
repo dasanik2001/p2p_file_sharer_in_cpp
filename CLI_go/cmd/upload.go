@@ -56,12 +56,12 @@ var uploadCmd = &cobra.Command{
 	Short: "Upload a file and get an invite code",
 	Long: `Upload a file to the Transfera server and receive an invite code.
 
-Share the invite code with anyone to let them download the file.
+Share the invite code with anyone to let them download the file (e.g. laptop to desktop).
 The file is streamed to the server — only ~128KB of memory is used
 regardless of file size.
 
 Examples:
-  transfera upload report.pdf
+  transfera upload photo.jpg
   transfera upload video.mp4 --max-downloads 5
   transfera upload huge-file.zip --max-size 500
   transfera --api https://transfera-api.onrender.com upload photo.jpg`,
@@ -160,8 +160,7 @@ Examples:
 		fmt.Printf("  │  Invite code: %d\n", result.Port)
 		fmt.Printf("  │  Max downloads: %d\n", result.MaxDownloads)
 		fmt.Printf("  └────────────────────────────────────────\n")
-		fmt.Printf("\n  Share this code with anyone to let them download the file.\n")
-		fmt.Printf("  They can download with:\n")
+		fmt.Printf("\n  Share this code to download on your desktop, laptop, or server:\n")
 		fmt.Printf("    transfera download %d\n\n", result.Port)
 
 		return nil // Success!

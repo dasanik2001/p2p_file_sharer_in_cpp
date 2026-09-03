@@ -1,8 +1,6 @@
 // Uses Socket Programming
 // Uses HTTP library
 
-// Future Work - make a CLI using which files can be transferred 
-
 
 ## Server (C++ API)
 
@@ -60,6 +58,36 @@ Production default API: **https://transfera-api.onrender.com** (Render). See **[
 ```bash
 curl https://transfera-api.onrender.com/api/health
 ```
+
+## CLI (Go)
+
+A fast command-line client for file sharing — transfer photos, videos, and documents between laptops and desktops with ~128KB memory usage. Connects to the official cloud server (`https://transfera-api.onrender.com`) by default.
+
+```bash
+cd CLI_go
+go mod tidy
+go build -o transfera.exe .   # Windows
+go build -o transfera .       # Linux/macOS
+```
+
+**Upload** a file (e.g. photo from your laptop) and get an invite code:
+```bash
+./transfera upload photo.jpg
+./transfera upload video.mp4 --max-downloads 5
+```
+
+**Download** on another machine (e.g. desktop) using the invite code:
+```bash
+./transfera download 52341
+./transfera download 52341 -o ~/Pictures/
+```
+
+**Health check**:
+```bash
+./transfera health
+```
+
+See **[CLI_go/README.md](CLI_go/README.md)** for full documentation.
 
 ## Deploy on Linode (optional self-host)
 

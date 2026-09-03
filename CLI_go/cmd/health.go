@@ -13,7 +13,8 @@
 package cmd
 
 import (
-	"fmt" // fmt — formatted output (printing results to terminal)
+	"fmt"     // fmt — formatted output (printing results to terminal)
+	"strings" // strings — URL checking
 
 	"github.com/spf13/cobra" // cobra — CLI framework
 
@@ -36,11 +37,12 @@ var healthCmd = &cobra.Command{
 	Short: "Check if the API server is reachable",
 	Long: `Check if the Transfera API server is reachable and responding to requests.
 
-This performs a GET request to /api/health with a 3-second timeout.
+Defaults to the official cloud server: https://transfera-api.onrender.com
+Override with --api or TRANSFERA_API_URL environment variable.
 
 Examples:
   transfera health
-  transfera --api https://transfera-api.onrender.com health`,
+  transfera --api http://127.0.0.1:8080 health`,
 
 	// RunE is the function that runs when the user types `transfera health`.
 	// It receives the command and any positional arguments (though health takes none).
@@ -55,7 +57,12 @@ Examples:
 		client := api.NewClient(apiBaseURL, verbose)
 
 		// --- Step 2: Call the health endpoint ---
-		fmt.Printf("\n  Checking API server at %s ...\n", apiBaseURL)
+		isLocal := strings.Contains(apiBaseURL, "127.0.0.1") || strings.Contains(apiBaseURL, "localhost")
+		if isLocal {
+			fmt.Printf("\n  Checking API server at %s ...\n", apiBaseURL)
+		} else {
+			fmt.Printf("\n  Checking API server at %s (may take a few seconds if waking up)... \n", apiBaseURL)
+		}
 
 		ok, err := client.Health()
 
@@ -65,8 +72,14 @@ Examples:
 			// The \n at start/end adds blank lines for readability.
 			fmt.Printf("\n  ✗ API server is unreachable at %s\n", apiBaseURL)
 			fmt.Printf("    %s\n", err)
-			fmt.Printf("\n  To start the server:\n")
-			fmt.Printf("    cd server && ./scripts/run.sh\n\n")
+
+			if isLocal {
+				fmt.Printf("\n  To start the local server:\n")
+				fmt.Printf("    cd server && ./scripts/run.sh\n\n")
+			} else {
+				fmt.Printf("\n  Tip: The cloud server on Render spins down when idle.\n")
+				fmt.Printf("  It may take 30-50 seconds to wake up. Please try again shortly!\n\n")
+			}
 
 			// Return the error so cobra exits with code 1.
 			// This is important for scripting:

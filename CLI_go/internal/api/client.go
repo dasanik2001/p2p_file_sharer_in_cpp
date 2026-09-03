@@ -38,8 +38,8 @@ import (
 // Client is the main struct that all commands use to talk to the server.
 // It wraps Go's built-in http.Client with our specific configuration.
 type Client struct {
-	// BaseURL is the server address, e.g., "http://127.0.0.1:8080"
-	// This comes from the --api flag in root.go
+	// BaseURL is the server address, e.g., "https://transfera-api.onrender.com"
+	// This comes from the --api flag in root.go (or TRANSFERA_API_URL env)
 	BaseURL string
 
 	// Verbose controls debug output. When true, we log HTTP details.
@@ -98,9 +98,10 @@ func (c *Client) Health() (bool, error) {
 		fmt.Printf("  → GET %s\n", url)
 	}
 
-	// Create a custom request so we can set a shorter timeout just for health checks.
-	// We don't want to wait 10 minutes for a health check — 3 seconds is enough.
-	healthClient := &http.Client{Timeout: 3 * time.Second}
+	// Create a custom client with 30s timeout for health checks.
+	// On free cloud tiers (Render), an idle server may take 15-30s to cold-start.
+	// 30 seconds allows the server to wake up without a false timeout error.
+	healthClient := &http.Client{Timeout: 30 * time.Second}
 
 	// http.Get sends an HTTP GET request. It returns:
 	//   resp — the response (status code, headers, body)
@@ -108,10 +109,10 @@ func (c *Client) Health() (bool, error) {
 	resp, err := healthClient.Get(url)
 	if err != nil {
 		// The server is unreachable. This could be:
+		//   - Server cold-starting on Render
 		//   - Server not running
 		//   - Wrong URL/port
-		//   - Network issue
-		//   - Firewall blocking
+		//   - Network or firewall issue
 		return false, fmt.Errorf("cannot reach API at %s: %w", c.BaseURL, err)
 	}
 
@@ -356,6 +357,9 @@ func (c *Client) Upload(filePath string, maxDownloads int, onProgress func(int64
 	}
 
 	// Check for HTTP errors
+	if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable {
+		return nil, fmt.Errorf("server is currently waking up (HTTP %d). Please wait ~15 seconds and try again", resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
 	}
@@ -402,8 +406,8 @@ type DownloadResult struct {
 //   port       — the invite code (port number from the upload response)
 //   outputDir  — directory to save the file in (empty = current directory)
 //   outputName — explicit filename to save as (empty = use server's filename)
-//   onProgress — callback with (bytesReceived, totalBytes) for progress bar
-func (c *Client) Download(port int, outputDir string, outputName string, onProgress func(int64, int64)) (*DownloadResult, error) {
+//   onProgress — callback with (filename, bytesReceived, totalBytes) for progress bar
+func (c *Client) Download(port int, outputDir string, outputName string, onProgress func(string, int64, int64)) (*DownloadResult, error) {
 	// Build the download URL: /api/download/52341
 	url := fmt.Sprintf("%s/api/download/%d", c.BaseURL, port)
 
@@ -432,6 +436,9 @@ func (c *Client) Download(port int, outputDir string, outputName string, onProgr
 	// This matches the web client's validateStatus in page.tsx.
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("invite code %d was already used or is no longer valid", port)
+	}
+	if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable {
+		return nil, fmt.Errorf("server is currently waking up (HTTP %d). Please wait ~15 seconds and try again", resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		body, _ := io.ReadAll(resp.Body)
@@ -466,9 +473,18 @@ func (c *Client) Download(port int, outputDir string, outputName string, onProgr
 
 	var savePath string
 	if outputDir != "" {
+		// Ensure output directory exists (create it if needed)
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return nil, fmt.Errorf("cannot create output directory %s: %w", outputDir, err)
+		}
 		savePath = filepath.Join(outputDir, filename)
 	} else {
 		savePath = filename
+	}
+
+	// Notify progress callback that download is starting with filename & size
+	if onProgress != nil {
+		onProgress(filename, 0, totalSize)
 	}
 
 	// --- Step 7: Create the output file ---
@@ -500,7 +516,7 @@ func (c *Client) Download(port int, outputDir string, outputName string, onProgr
 
 			// Update the progress bar
 			if onProgress != nil {
-				onProgress(totalReceived, totalSize)
+				onProgress(filename, totalReceived, totalSize)
 			}
 		}
 

@@ -17,16 +17,26 @@ import (
 	"os"  // os = operating system — gives us os.Exit() to quit with an error code
 
 	"github.com/spf13/cobra" // cobra = the CLI framework
+
+	"github.com/dasanik2001/transfera-client/cli/internal/tui" // Interactive terminal UI
 )
 
 // ---------------------------------------------------------------------------
 // Global variables — accessible by all subcommands (upload.go, download.go, etc.)
 // ---------------------------------------------------------------------------
 
+const (
+	// DefaultAPIURL is the official production Transfera API server hosted on Render.
+	DefaultAPIURL = "https://transfera-api.onrender.com"
+)
+
 var (
 	// apiBaseURL holds the server address. Every HTTP request the CLI makes
-	// will be sent to this URL. Default is localhost:8080 (the C++ server's
-	// default port). Users override with: transfera --api https://example.com upload ...
+	// will be sent to this URL. Default is https://transfera-api.onrender.com.
+	// Users can override with:
+	//   1. --api flag
+	//   2. TRANSFERA_API_URL environment variable
+	//   3. NEXT_PUBLIC_API_BASE_URL environment variable
 	apiBaseURL string
 
 	// verbose controls whether we print extra debug information.
@@ -61,7 +71,8 @@ var rootCmd = &cobra.Command{
 
   Transfera CLI — Secure P2P File Sharing from the terminal.
 
-  Upload files, share invite codes, and download — all without a browser.
+  Upload files (photos, documents, videos), share invite codes, and download.
+  Fast, cross-platform transfer between laptops, desktops, and servers.
   Optimized for large file transfers (100MB+) with minimal memory usage.
 
   Usage:
@@ -69,8 +80,7 @@ var rootCmd = &cobra.Command{
     transfera download <invite-code>  Download a file using an invite code
     transfera health                  Check if the API server is reachable
 
-  The CLI talks to the same C++ API server as the web UI.
-  Default server: http://127.0.0.1:8080 (override with --api flag)`,
+  Official server: https://transfera-api.onrender.com (override with --api or TRANSFERA_API_URL)`,
 
 	// SilenceUsage: when a command returns an error, cobra normally prints
 	// the usage text again. We silence this because our error messages are
@@ -80,6 +90,15 @@ var rootCmd = &cobra.Command{
 	// SilenceErrors: we handle error printing ourselves in Execute(),
 	// so we tell cobra not to print errors automatically.
 	SilenceErrors: true,
+
+	// RunE: When the user types just `transfera` with no subcommand, launch
+	// the interactive terminal UI instead of just printing help text.
+	// This makes double-clicking transfera.exe useful and provides a
+	// guided experience for new users.
+	RunE: func(cmd *cobra.Command, args []string) error {
+		tui.RunMenu(&apiBaseURL, &verbose)
+		return nil
+	},
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +135,13 @@ func Execute() {
 // can have an init() function. Go guarantees all init() functions run before
 // main() starts. We use it to register global flags.
 func init() {
+	defaultAPI := DefaultAPIURL
+	if envAPI := os.Getenv("TRANSFERA_API_URL"); envAPI != "" {
+		defaultAPI = envAPI
+	} else if envAPI := os.Getenv("NEXT_PUBLIC_API_BASE_URL"); envAPI != "" {
+		defaultAPI = envAPI
+	}
+
 	// PersistentFlags are "global" — they work on the root command AND all
 	// subcommands. This is different from Flags() which only works on the
 	// specific command.
@@ -124,13 +150,13 @@ func init() {
 	//   &apiBaseURL  — pointer to the variable where the value is stored
 	//   "api"        — the long flag name (--api)
 	//   "a"          — the short flag name (-a)
-	//   "http://..." — the default value
+	//   defaultAPI   — default official URL (or env var if set)
 	//   "API server" — description shown in --help
 	rootCmd.PersistentFlags().StringVarP(
 		&apiBaseURL,
 		"api", "a",
-		"http://127.0.0.1:8080",
-		"API server URL (e.g., https://transfera-api.onrender.com)",
+		defaultAPI,
+		"API server URL (default: https://transfera-api.onrender.com or TRANSFERA_API_URL env)",
 	)
 
 	// BoolVarP registers a boolean flag:

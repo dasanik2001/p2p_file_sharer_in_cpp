@@ -117,16 +117,20 @@ Examples:
 		// an indeterminate spinner instead.
 		var pBar *progressbar.ProgressBar
 
-		result, err := client.Download(port, outputDir, outputName, func(received, total int64) {
+		result, err := client.Download(port, outputDir, outputName, func(filename string, received, total int64) {
 			// --- Lazy bar creation on first callback ---
 			if pBar == nil {
+				displayName := filename
+				if displayName == "" {
+					displayName = "file"
+				}
 				if total > 0 {
 					// We know the total size — create a determinate progress bar
-					pBar = progress.NewDownloadBar(total, "file")
+					pBar = progress.NewDownloadBar(total, displayName)
 				} else {
 					// Unknown size — create an indeterminate bar (spinner mode).
 					// Use -1 as total to trigger spinner behavior.
-					pBar = progress.NewDownloadBar(-1, "file")
+					pBar = progress.NewDownloadBar(-1, displayName)
 				}
 			}
 
