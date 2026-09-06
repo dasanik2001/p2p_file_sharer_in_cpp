@@ -97,6 +97,10 @@ Examples:
 		// =====================================================================
 		// Step 2: Start the download
 		// =====================================================================
+		if outputDir != "" {
+			outputDir = validation.ResolvePath(outputDir)
+		}
+
 		fmt.Printf("\n  Downloading from invite code: %d\n\n", port)
 
 		// Create the API client

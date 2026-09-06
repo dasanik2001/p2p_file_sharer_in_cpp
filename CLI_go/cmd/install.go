@@ -18,18 +18,15 @@ import (
 	"github.com/dasanik2001/transfera-client/cli/internal/installer"
 )
 
-var removeInstall bool
+var (
+	removeInstall    bool
+	reinstallInstall bool
+)
 
 var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install transfera globally so it works in any terminal",
-	Long: `Install transfera.exe to your system so you can type "transfera" in any
-terminal window. This copies the binary to %LOCALAPPDATA%\Programs\Transfera\
-and adds it to your user PATH.
-
-Examples:
-  transfera install           Install transfera globally
-  transfera install --remove  Uninstall transfera from PATH`,
+	Long:  "", // Dynamically configured in init()
 
 	RunE: func(_ *cobra.Command, _ []string) error {
 		if removeInstall {
@@ -42,7 +39,19 @@ Examples:
 			return nil
 		}
 
-		fmt.Printf("\n  Installing transfera...\n")
+		isInstalled := installer.IsInstalled()
+		isInPath := installer.IsInPath()
+		hasUpdate := isInstalled && installer.IsUpdateAvailable()
+
+		if isInstalled && isInPath {
+			if hasUpdate {
+				fmt.Printf("\n  Updating transfera in PATH (new version detected)...\n")
+			} else {
+				fmt.Printf("\n  Reinstalling transfera in PATH...\n")
+			}
+		} else {
+			fmt.Printf("\n  Installing transfera...\n")
+		}
 		fmt.Printf("  Target: %s\n\n", installer.InstallDir())
 
 		msg, err := installer.Install()
@@ -56,6 +65,18 @@ Examples:
 }
 
 func init() {
+	installCmd.Long = fmt.Sprintf(`Install transfera to your system so you can type "transfera" in any
+terminal window. This copies the binary to %s
+and adds it to your user PATH.
+
+If transfera is already installed, running this command will update/reinstall
+the binary with the current version.
+
+Examples:
+  transfera install              Install or update transfera globally
+  transfera install --reinstall  Reinstall / update transfera in PATH
+  transfera install --remove     Uninstall transfera from PATH`, installer.InstallDir())
+
 	rootCmd.AddCommand(installCmd)
 
 	installCmd.Flags().BoolVar(
@@ -63,5 +84,12 @@ func init() {
 		"remove",
 		false,
 		"Uninstall transfera from PATH",
+	)
+
+	installCmd.Flags().BoolVarP(
+		&reinstallInstall,
+		"reinstall", "r",
+		false,
+		"Reinstall or update transfera in PATH",
 	)
 }

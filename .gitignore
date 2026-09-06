@@ -54,6 +54,9 @@ parcel-cache/
 *.exe
 *.out
 *.class
+/CLI_go/transfera
+/CLI_go/transfera-*
+/CLI_go/cli
 
 # Coverage and test output
 coverage/

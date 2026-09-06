@@ -16,6 +16,8 @@ package validation
 import (
 	"fmt" // fmt — formatting error messages
 	"os"  // os — file system operations (stat, check existence)
+	"path/filepath"
+	"strings"
 )
 
 // =========================================================================
@@ -26,6 +28,27 @@ import (
 // This matches MAX_UPLOAD_MB = 100 in client/src/lib/uploadValidation.ts
 // and the server's default in FileController constructor.
 const DefaultMaxUploadMB = 100
+
+// =========================================================================
+// ResolvePath — expand home directory (~) and strip quotes
+// =========================================================================
+
+// ResolvePath resolves tilde (~) expansion and strips quotes from a file path.
+func ResolvePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.Trim(path, "\"'")
+
+	if path == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	} else if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
+}
 
 // =========================================================================
 // ValidateFile — check if a file is suitable for upload
@@ -47,6 +70,8 @@ const DefaultMaxUploadMB = 100
 //     return `File must be ${MAX_UPLOAD_MB} MB or smaller`;
 //   }
 func ValidateFile(path string, maxSizeMB int) (int64, error) {
+	path = ResolvePath(path)
+
 	// Use default if not specified
 	if maxSizeMB <= 0 {
 		maxSizeMB = DefaultMaxUploadMB

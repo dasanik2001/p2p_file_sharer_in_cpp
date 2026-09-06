@@ -77,7 +77,7 @@ Examples:
 	// lets cobra handle it with a proper exit code.
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// args[0] is the file path — the first (and only) positional argument.
-		filePath := args[0]
+		filePath := validation.ResolvePath(args[0])
 
 		// filepath.Base extracts the filename: "C:\Users\docs\report.pdf" → "report.pdf"
 		filename := filepath.Base(filePath)

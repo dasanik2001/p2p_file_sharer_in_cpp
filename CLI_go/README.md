@@ -92,6 +92,18 @@ transfera download 52341 --output-name doc.pdf # Override filename
 | `--output` | `-o` | `.` | Output directory (automatically created if it doesn't exist) |
 | `--output-name` | | | Override download filename |
 
+### `transfera install`
+
+Install the CLI binary globally to your system so you can run `transfera` from any terminal.
+
+```bash
+transfera install           # Install globally to user PATH
+transfera install --remove  # Uninstall and remove from PATH
+```
+
+- **Linux / macOS**: Copies binary to `~/.local/bin/transfera` and configures your shell (`.zshrc`, `.bashrc`, etc.)
+- **Windows**: Copies binary to `%LOCALAPPDATA%\Programs\Transfera\transfera.exe` and updates User PATH via Registry
+
 ## Global Flags & Environment Variables
 
 Available on all commands:
@@ -125,17 +137,24 @@ GOOS=windows GOARCH=amd64 go build -o transfera.exe .
 CLI_go/
 ├── main.go                      # Entry point (calls cmd.Execute())
 ├── cmd/
-│   ├── root.go                  # Root command, global flags
+│   ├── root.go                  # Root command, global flags, TUI trigger
 │   ├── health.go                # Health check command
 │   ├── upload.go                # Upload command
-│   └── download.go              # Download command
+│   ├── download.go              # Download command
+│   └── install.go               # Global PATH installer command
 ├── internal/
 │   ├── api/
 │   │   └── client.go            # HTTP client (upload, download, health)
+│   ├── installer/
+│   │   ├── installer.go         # Shared installer interface & helpers
+│   │   ├── installer_unix.go    # Linux/macOS PATH installer (~/.local/bin)
+│   │   └── installer_windows.go # Windows PATH installer (Registry)
 │   ├── progress/
 │   │   └── bar.go               # Terminal progress bars
+│   ├── tui/
+│   │   └── menu.go              # Interactive terminal menu interface
 │   └── validation/
-│       └── file.go              # File validation (size, existence)
+│       └── file.go              # File validation & path resolution
 ├── go.mod                       # Go module definition
 └── README.md                    # This file
 ```

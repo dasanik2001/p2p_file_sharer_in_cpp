@@ -35,14 +35,14 @@ import (
 // =========================================================================
 
 const (
-	colorReset  = "\033[0m"
-	colorCyan   = "\033[36m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
-	colorBold   = "\033[1m"
-	colorDim    = "\033[2m"
-	colorWhite  = "\033[97m"
+	colorReset   = "\033[0m"
+	colorCyan    = "\033[36m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorRed     = "\033[31m"
+	colorBold    = "\033[1m"
+	colorDim     = "\033[2m"
+	colorWhite   = "\033[97m"
 	colorMagenta = "\033[35m"
 )
 
@@ -70,7 +70,7 @@ func RunMenu(apiURL *string, verbose *bool) {
 		case "3":
 			handleHealth(*apiURL, *verbose)
 		case "4":
-			handleInstall()
+			handleInstall(reader)
 		case "5":
 			handleChangeServer(reader, apiURL)
 		case "6":
@@ -97,14 +97,15 @@ func clearScreen() {
 
 func printBanner(apiURL string) {
 	fmt.Println()
-	fmt.Printf("  %s%s", colorCyan, colorBold)
-	fmt.Println("  ___________                          _____")
-	fmt.Println(" |           |                        / ____|")
-	fmt.Println(" |--   ------'_ __ __ _ _ __  ___  | |__ ___ _ __ __ _")
-	fmt.Println("    |  |    | '__/ _' | '_ \\/ __|  |  __/ _ \\ '__/ _' |")
-	fmt.Println("    |  |    | | | (_| | | | \\__ \\  | | |  __/ | | (_| |")
-	fmt.Println("    |__|    |_|  \\__,_|_| |_|___/  |_|  \\___|_|  \\__,_|")
-	fmt.Printf("  %s\n", colorReset)
+	fmt.Print(colorCyan, colorBold)
+	fmt.Println("   ___________                          _____")
+	fmt.Println("  |           |                        / ____|")
+	fmt.Println("  |--   ------'_ __ __ _ _ __  ___  | |__ ___ _ __ __ _")
+	fmt.Println("     |  |    | '__/ _' | '_ \\/ __|  |  __/ _ \\ '__/ _' |")
+	fmt.Println("     |  |    | | | (_| | | | \\__ \\  | | |  __/ | | (_| |")
+	fmt.Println("     |__|    |_|  \\__,_|_| |_|___/  |_|  \\___|_|  \\__,_|")
+	fmt.Print(colorReset)
+	fmt.Println()
 	fmt.Printf("  %s%sSecure P2P File Sharing — Terminal Edition%s\n", colorDim, colorWhite, colorReset)
 	fmt.Println()
 
@@ -113,8 +114,13 @@ func printBanner(apiURL string) {
 
 	// PATH installation status
 	if installer.IsInPath() && installer.IsInstalled() {
-		fmt.Printf("  %s● Status:%s %s✓ Installed globally%s — type %stransfera%s anywhere\n",
-			colorDim, colorReset, colorGreen, colorReset, colorBold, colorReset)
+		if installer.IsUpdateAvailable() {
+			fmt.Printf("  %s● Status:%s %s🔄 Update available%s — select option 4 to update binary in PATH\n",
+				colorDim, colorReset, colorYellow, colorReset)
+		} else {
+			fmt.Printf("  %s● Status:%s %s✓ Installed globally%s — type %stransfera%s anywhere\n",
+				colorDim, colorReset, colorGreen, colorReset, colorBold, colorReset)
+		}
 	} else {
 		fmt.Printf("  %s● Status:%s %s⚠ Not installed to PATH%s — select option 4 to install\n",
 			colorDim, colorReset, colorYellow, colorReset)
@@ -123,13 +129,27 @@ func printBanner(apiURL string) {
 }
 
 func printMenu(apiURL string) {
+	var opt4Icon, opt4Text string
+	if installer.IsInPath() && installer.IsInstalled() {
+		if installer.IsUpdateAvailable() {
+			opt4Icon = "🔄"
+			opt4Text = "Update in PATH (new version)        "
+		} else {
+			opt4Icon = "⚡"
+			opt4Text = "Reinstall / Update in PATH          "
+		}
+	} else {
+		opt4Icon = "⚡"
+		opt4Text = "Install to PATH                     "
+	}
+
 	fmt.Printf("  %s%s┌──────────────────────────────────────────────┐%s\n", colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %-44s%s%s│%s\n", colorCyan, colorBold, colorReset, "What would you like to do?", colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %-43s%s%s│%s\n", colorCyan, colorBold, colorReset, "What would you like to do?", colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s├──────────────────────────────────────────────┤%s\n", colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s1.%s 📤  Upload a file                       %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s2.%s 📥  Download a file                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s3.%s 🩺  Server Health Check                 %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s4.%s ⚡  Install to PATH                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorYellow, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s4.%s %s  %s%s%s│%s\n", colorCyan, colorBold, colorReset, colorYellow, colorReset, opt4Icon, opt4Text, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s5.%s ⚙️   Change Server URL                   %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s6.%s ❓  Help & CLI Reference                %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s7.%s ❌  Exit                                %s%s│%s\n", colorCyan, colorBold, colorReset, colorRed, colorReset, colorCyan, colorBold, colorReset)
@@ -290,18 +310,36 @@ func handleHealth(apiURL string, verbose bool) {
 	}
 }
 
-func handleInstall() {
-	fmt.Printf("\n  %s%s── Install to PATH ──%s\n\n", colorCyan, colorBold, colorReset)
+func handleInstall(reader *bufio.Reader) {
+	destPath := installer.InstalledBinaryPath()
+	isInstalled := installer.IsInstalled()
+	isInPath := installer.IsInPath()
+	hasUpdate := isInstalled && installer.IsUpdateAvailable()
 
-	if installer.IsInPath() && installer.IsInstalled() {
-		fmt.Printf("  %s✓ Transfera is already installed and in PATH.%s\n", colorGreen, colorReset)
-		fmt.Printf("    Binary: %s\n", installer.InstalledBinaryPath())
-		fmt.Printf("    You can type %stransfera%s in any terminal.\n", colorBold, colorReset)
-		return
+	if isInstalled && isInPath {
+		if hasUpdate {
+			fmt.Printf("\n  %s%s── Update Transfera in PATH ──%s\n\n", colorCyan, colorBold, colorReset)
+			fmt.Printf("  %s🔄 New version / updated binary detected!%s\n", colorYellow, colorReset)
+			fmt.Printf("    Installed: %s\n\n", destPath)
+		} else {
+			fmt.Printf("\n  %s%s── Reinstall / Update in PATH ──%s\n\n", colorCyan, colorBold, colorReset)
+			fmt.Printf("  %s✓ Transfera is already installed and in PATH.%s\n", colorGreen, colorReset)
+			fmt.Printf("    Installed: %s\n\n", destPath)
+		}
+
+		confirm := prompt(reader, fmt.Sprintf("  %s▶ Overwrite/reinstall binary? (Y/n):%s ", colorCyan, colorReset))
+		confirm = strings.ToLower(strings.TrimSpace(confirm))
+		if confirm != "" && confirm != "y" && confirm != "yes" {
+			fmt.Printf("\n  %sNo changes made.%s\n", colorDim, colorReset)
+			return
+		}
+		fmt.Println()
+	} else {
+		fmt.Printf("\n  %s%s── Install to PATH ──%s\n\n", colorCyan, colorBold, colorReset)
 	}
 
-	fmt.Printf("  Installing transfera to: %s\n", installer.InstallDir())
-	fmt.Printf("  Adding to user PATH...\n\n")
+	fmt.Printf("  Target directory: %s\n", installer.InstallDir())
+	fmt.Printf("  Installing binary & verifying PATH...\n\n")
 
 	msg, err := installer.Install()
 	if err != nil {
@@ -374,10 +412,36 @@ func promptContinue(reader *bufio.Reader) {
 	clearScreen()
 }
 
-// cleanPath strips surrounding quotes and whitespace from a file path.
-// This handles Windows drag-and-drop which wraps paths in double-quotes.
+// cleanPath strips surrounding quotes, whitespace, expands tildes (~),
+// and unescapes backslash-escaped spaces from terminal drag-and-drop on macOS/Linux.
 func cleanPath(p string) string {
 	p = strings.TrimSpace(p)
 	p = strings.Trim(p, "\"'")
+
+	// If file exists as-is, return it
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+
+	// Expand tilde (~)
+	if p == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	} else if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, p[2:])
+		}
+	}
+
+	// Handle terminal drag-and-drop on macOS/Linux escaping spaces with "\ "
+	if strings.Contains(p, `\ `) {
+		unescaped := strings.ReplaceAll(p, `\ `, " ")
+		if _, err := os.Stat(unescaped); err == nil {
+			return unescaped
+		}
+		p = unescaped
+	}
+
 	return strings.TrimSpace(p)
 }

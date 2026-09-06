@@ -26,6 +26,9 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
+	// Version is the current version of Transfera CLI.
+	Version = "1.0.0"
+
 	// DefaultAPIURL is the official production Transfera API server hosted on Render.
 	DefaultAPIURL = "https://transfera-api.onrender.com"
 )
@@ -52,22 +55,23 @@ var (
 // rootCmd is the base command when called without any subcommands.
 // cobra.Command is a struct with many fields; we only set the ones we need:
 //
-//   Use:   — the one-word name shown in usage text
-//   Short: — brief description shown in the parent's help
-//   Long:  — detailed description shown when user types `transfera --help`
+//	Use:   — the one-word name shown in usage text
+//	Short: — brief description shown in the parent's help
+//	Long:  — detailed description shown when user types `transfera --help`
 var rootCmd = &cobra.Command{
-	Use:   "transfera",
-	Short: "Transfera CLI — Secure P2P File Sharing",
+	Use:     "transfera",
+	Version: Version,
+	Short:   "Transfera CLI — Secure P2P File Sharing",
 
 	// Long is a multi-line description shown when the user runs `transfera`
 	// with no subcommand. The backtick ` allows multi-line strings in Go.
 	Long: `
-  ___________                          _____                    
- |           |                        / ____|                   
- |--   ------'_ __ __ _ _ __  ___  | |__ ___ _ __ __ _        
-    |  |    | '__/ _' | '_ \/ __|  |  __/ _ \ '__/ _' |       
-    |  |    | | | (_| | | | \__ \  | | |  __/ | | (_| |       
-    |__|    |_|  \__,_|_| |_|___/  |_|  \___|_|  \__,_|       
+   ___________                          _____                    
+  |           |                        / ____|                   
+  |--   ------'_ __ __ _ _ __  ___  | |__ ___ _ __ __ _        
+     |  |    | '__/ _' | '_ \/ __|  |  __/ _ \ '__/ _' |       
+     |  |    | | | (_| | | | \__ \  | | |  __/ | | (_| |       
+     |__|    |_|  \__,_|_| |_|___/  |_|  \___|_|  \__,_|       
 
   Transfera CLI — Secure P2P File Sharing from the terminal.
 
@@ -108,11 +112,11 @@ var rootCmd = &cobra.Command{
 // Execute runs the root command. This is the entry point for the entire CLI.
 //
 // How cobra works internally:
-//   1. It reads os.Args (the command-line arguments)
-//   2. It finds which subcommand matches (upload, download, health)
-//   3. It parses flags (--api, --verbose, --max-downloads, etc.)
-//   4. It calls that subcommand's RunE function
-//   5. If RunE returns an error, we print it and exit with code 1
+//  1. It reads os.Args (the command-line arguments)
+//  2. It finds which subcommand matches (upload, download, health)
+//  3. It parses flags (--api, --verbose, --max-downloads, etc.)
+//  4. It calls that subcommand's RunE function
+//  5. If RunE returns an error, we print it and exit with code 1
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		// Print the error in red-ish formatting to stderr.
