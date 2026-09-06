@@ -6,11 +6,9 @@
 // It provides a friendly, menu-driven interface for all Transfera features:
 //   1. Upload a file
 //   2. Download a file
-//   3. Health check
-//   4. Install to PATH
-//   5. Change server URL
-//   6. Help
-//   7. Exit
+//   3. Install to PATH
+//   4. Help
+//   5. Exit
 
 package tui
 
@@ -21,7 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
+
 
 	"github.com/dasanik2001/transfera-client/cli/internal/api"
 	"github.com/dasanik2001/transfera-client/cli/internal/installer"
@@ -56,11 +54,11 @@ func RunMenu(apiURL *string, verbose *bool) {
 	reader := bufio.NewReader(os.Stdin)
 
 	clearScreen()
-	printBanner(*apiURL)
+	printBanner()
 
 	for {
-		printMenu(*apiURL)
-		choice := prompt(reader, fmt.Sprintf("\n  %s▶ Choose an option (1-7):%s ", colorCyan, colorReset))
+		printMenu()
+		choice := prompt(reader, fmt.Sprintf("\n  %s▶ Choose an option (1-5):%s ", colorCyan, colorReset))
 
 		switch strings.TrimSpace(choice) {
 		case "1":
@@ -68,18 +66,14 @@ func RunMenu(apiURL *string, verbose *bool) {
 		case "2":
 			handleDownload(reader, *apiURL, *verbose)
 		case "3":
-			handleHealth(*apiURL, *verbose)
-		case "4":
 			handleInstall(reader)
-		case "5":
-			handleChangeServer(reader, apiURL)
-		case "6":
+		case "4":
 			handleHelp()
-		case "7", "q", "Q", "exit", "quit":
+		case "5", "q", "Q", "exit", "quit":
 			fmt.Printf("\n  %s👋 Goodbye!%s\n\n", colorCyan, colorReset)
 			return
 		default:
-			fmt.Printf("\n  %s✗ Invalid option. Please enter 1-7.%s\n", colorRed, colorReset)
+			fmt.Printf("\n  %s✗ Invalid option. Please enter 1-5.%s\n", colorRed, colorReset)
 		}
 
 		fmt.Println()
@@ -95,7 +89,7 @@ func clearScreen() {
 	fmt.Print("\033[2J\033[H")
 }
 
-func printBanner(apiURL string) {
+func printBanner() {
 	fmt.Println()
 	fmt.Print(colorCyan, colorBold)
 	fmt.Println("   ___________                          _____")
@@ -109,50 +103,26 @@ func printBanner(apiURL string) {
 	fmt.Printf("  %s%sSecure P2P File Sharing — Terminal Edition%s\n", colorDim, colorWhite, colorReset)
 	fmt.Println()
 
-	// Connection status
-	fmt.Printf("  %s● Server:%s %s\n", colorDim, colorReset, apiURL)
-
 	// PATH installation status
 	if installer.IsInPath() && installer.IsInstalled() {
-		if installer.IsUpdateAvailable() {
-			fmt.Printf("  %s● Status:%s %s🔄 Update available%s — select option 4 to update binary in PATH\n",
-				colorDim, colorReset, colorYellow, colorReset)
-		} else {
-			fmt.Printf("  %s● Status:%s %s✓ Installed globally%s — type %stransfera%s anywhere\n",
-				colorDim, colorReset, colorGreen, colorReset, colorBold, colorReset)
-		}
+		fmt.Printf("  %s● Status:%s %s✓ Installed globally%s — type %stransfera%s anywhere\n",
+			colorDim, colorReset, colorGreen, colorReset, colorBold, colorReset)
 	} else {
-		fmt.Printf("  %s● Status:%s %s⚠ Not installed to PATH%s — select option 4 to install\n",
+		fmt.Printf("  %s● Status:%s %s⚠ Not installed to PATH%s — select option 3 to install\n",
 			colorDim, colorReset, colorYellow, colorReset)
 	}
 	fmt.Println()
 }
 
-func printMenu(apiURL string) {
-	var opt4Icon, opt4Text string
-	if installer.IsInPath() && installer.IsInstalled() {
-		if installer.IsUpdateAvailable() {
-			opt4Icon = "🔄"
-			opt4Text = "Update in PATH (new version)        "
-		} else {
-			opt4Icon = "⚡"
-			opt4Text = "Reinstall / Update in PATH          "
-		}
-	} else {
-		opt4Icon = "⚡"
-		opt4Text = "Install to PATH                     "
-	}
-
+func printMenu() {
 	fmt.Printf("  %s%s┌──────────────────────────────────────────────┐%s\n", colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %-43s%s%s│%s\n", colorCyan, colorBold, colorReset, "What would you like to do?", colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s├──────────────────────────────────────────────┤%s\n", colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s1.%s 📤  Upload a file                       %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s│%s   %s2.%s 📥  Download a file                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s3.%s 🩺  Server Health Check                 %s%s│%s\n", colorCyan, colorBold, colorReset, colorGreen, colorReset, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s4.%s %s  %s%s%s│%s\n", colorCyan, colorBold, colorReset, colorYellow, colorReset, opt4Icon, opt4Text, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s5.%s ⚙️   Change Server URL                   %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s6.%s ❓  Help & CLI Reference                %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
-	fmt.Printf("  %s%s│%s   %s7.%s ❌  Exit                                %s%s│%s\n", colorCyan, colorBold, colorReset, colorRed, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s3.%s ⚡  Install to PATH                     %s%s│%s\n", colorCyan, colorBold, colorReset, colorYellow, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s4.%s ❓  Help & CLI Reference                %s%s│%s\n", colorCyan, colorBold, colorReset, colorDim, colorReset, colorCyan, colorBold, colorReset)
+	fmt.Printf("  %s%s│%s   %s5.%s ❌  Exit                                %s%s│%s\n", colorCyan, colorBold, colorReset, colorRed, colorReset, colorCyan, colorBold, colorReset)
 	fmt.Printf("  %s%s└──────────────────────────────────────────────┘%s\n", colorCyan, colorBold, colorReset)
 }
 
@@ -276,40 +246,6 @@ func handleDownload(reader *bufio.Reader, apiURL string, verbose bool) {
 	fmt.Printf("    Saved to: %s%s%s\n", colorBold, result.FilePath, colorReset)
 }
 
-func handleHealth(apiURL string, verbose bool) {
-	fmt.Printf("\n  %s%s── Server Health Check ──%s\n\n", colorCyan, colorBold, colorReset)
-
-	isLocal := strings.Contains(apiURL, "127.0.0.1") || strings.Contains(apiURL, "localhost")
-	if isLocal {
-		fmt.Printf("  Checking API server at %s ...\n", apiURL)
-	} else {
-		fmt.Printf("  Checking API server at %s %s(may take a few seconds if waking up)%s...\n",
-			apiURL, colorDim, colorReset)
-	}
-
-	client := api.NewClient(apiURL, verbose)
-	start := time.Now()
-	ok, err := client.Health()
-	latency := time.Since(start)
-
-	if err != nil {
-		fmt.Printf("\n  %s✗ API server is unreachable%s at %s\n", colorRed, colorReset, apiURL)
-		fmt.Printf("    %s\n", err)
-		if !isLocal {
-			fmt.Printf("\n  %sTip: The cloud server on Render spins down when idle.%s\n", colorYellow, colorReset)
-			fmt.Printf("  %sIt may take 30-50 seconds to wake up. Try again shortly!%s\n", colorYellow, colorReset)
-		}
-		return
-	}
-
-	if ok {
-		fmt.Printf("\n  %s✓ API server is online%s at %s\n", colorGreen, colorReset, apiURL)
-		fmt.Printf("    Response time: %s%s%s\n", colorBold, latency.Round(time.Millisecond), colorReset)
-	} else {
-		fmt.Printf("\n  %s⚠ API server responded but may not be healthy%s at %s\n", colorYellow, colorReset, apiURL)
-	}
-}
-
 func handleInstall(reader *bufio.Reader) {
 	destPath := installer.InstalledBinaryPath()
 	isInstalled := installer.IsInstalled()
@@ -348,34 +284,6 @@ func handleInstall(reader *bufio.Reader) {
 	}
 
 	fmt.Printf("  %s✓ %s%s\n", colorGreen, msg, colorReset)
-}
-
-func handleChangeServer(reader *bufio.Reader, apiURL *string) {
-	fmt.Printf("\n  %s%s── Change Server URL ──%s\n\n", colorCyan, colorBold, colorReset)
-	fmt.Printf("  Current server: %s%s%s\n\n", colorBold, *apiURL, colorReset)
-	fmt.Printf("  %s1.%s Official cloud: https://transfera-api.onrender.com\n", colorGreen, colorReset)
-	fmt.Printf("  %s2.%s Local server:   http://127.0.0.1:8080\n", colorGreen, colorReset)
-	fmt.Printf("  %s3.%s Custom URL\n", colorGreen, colorReset)
-
-	choice := prompt(reader, fmt.Sprintf("\n  %sSelect (1-3):%s ", colorWhite, colorReset))
-
-	switch strings.TrimSpace(choice) {
-	case "1":
-		*apiURL = "https://transfera-api.onrender.com"
-	case "2":
-		*apiURL = "http://127.0.0.1:8080"
-	case "3":
-		custom := prompt(reader, fmt.Sprintf("  %sEnter server URL:%s ", colorWhite, colorReset))
-		custom = strings.TrimSpace(custom)
-		if custom != "" {
-			*apiURL = custom
-		}
-	default:
-		fmt.Printf("  %sNo changes made.%s\n", colorDim, colorReset)
-		return
-	}
-
-	fmt.Printf("\n  %s✓ Server updated to: %s%s\n", colorGreen, *apiURL, colorReset)
 }
 
 func handleHelp() {
